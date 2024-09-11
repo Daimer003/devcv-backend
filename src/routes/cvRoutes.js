@@ -1,7 +1,8 @@
 const express = require('express');
-const { createCV } = require('../controllers/cvController');
+const cvController = require('../controllers/cvController');
 const router = express.Router();
 
-router.post('/create', createCV);
+router.post('/create', cvController.createCV);
+router.get('/all', cvController.getAllCVs);
 
 module.exports = router;

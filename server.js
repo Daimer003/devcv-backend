@@ -3,9 +3,13 @@ const cors = require('cors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const cvRoutes = require('./src/routes/cvRoutes');
+const connectDB = require('./src/config/db');
 
 dotenv.config();
 const app = express()
+
+// Conectar a la base de datos
+connectDB();
 
 // Middlewares
 app.use(express.json())
@@ -18,7 +22,6 @@ app.get('/', (req, res) => {
 })
 
 app.use('/api/cv', cvRoutes);
-
 
 const PORT = process.env.PORT || 5000;
 
