@@ -1,66 +1,57 @@
 const CV = require('../models/cv');
 const PDFDocument = require('pdfkit');
-const fs = require('fs');
-const path = require('path');
-
+const mongoose = require('mongoose');
+const { Readable } = require('stream');
 // Función para crear un CV
 const createCV = async (req, res) => {
   try {
     const { name, email, skills, experience } = req.body;
 
-    // Ruta donde guardaremos el archivo PDF
-    const dirPath = path.join(__dirname, '../file');
-    
-    // Verificar si la carpeta existe, si no, crearla
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
-    }
-
-    const pdfPath = path.join(dirPath, `${name}_CV.pdf`);
-    
     // Crear un nuevo documento PDF
     const doc = new PDFDocument();
 
-    // Crear un flujo de escritura a un archivo
-    const writeStream = fs.createWriteStream(pdfPath);
-    doc.pipe(writeStream);
-    
-    // Título
-    doc.fontSize(20).text('Curriculum Vitae', { align: 'center' });
-    
-    // Nombre y Email
-    doc.fontSize(16).text(`Nombre: ${name}`, { align: 'left' });
-    doc.text(`Email: ${email}`);
-    
-    // Experiencia
-    doc.text('Experiencia:', { underline: true });
-    doc.fontSize(12).text(experience);
-    
-    // Finalizar la escritura del documento
-    doc.end();
-
-    // Escuchar cuando se finalice la escritura del documento
-    writeStream.on('finish', function () {
-      res.download(pdfPath, `${name}_CV.pdf`, (err) => {
-        if (err) {
-          return res.status(500).send('Error al descargar el archivo');
-        }
-        fs.unlinkSync(pdfPath); // Eliminar el archivo del servidor después de enviarlo
-      });
+    // Usar un stream de memoria para capturar el PDF en un buffer
+    let buffers = [];
+    const stream = new Readable({
+      read() {}
     });
 
-    // Guardar el CV en la base de datos
-    const newCV = new CV({ name, email, skills, experience });
-    await newCV.save();
+    // Cuando el PDF es escrito, lo añadimos al array de buffers
+    doc.on('data', (chunk) => buffers.push(chunk));
 
+    // Cuando el PDF termina, lo convertimos a buffer y guardamos
+    doc.on('end', async () => {
+      const pdfBuffer = Buffer.concat(buffers);
+
+      // Crear el nuevo CV con el PDF en formato buffer
+      const newCV = new CV({
+        name,
+        email,
+        skills,
+        experience,
+        pdf: pdfBuffer // Guardar el PDF como buffer
+      });
+
+      // Guardar el CV en la base de datos
+      await newCV.save();
+
+      // Responder con éxito y la URL para descargar el PDF
+      res.status(201).json({ message: 'CV creado y PDF guardado', downloadUrl: `/download/${name}` });
+    });
+
+    // Añadir contenido al PDF
+    doc.fontSize(20).text('Curriculum Vitae', { align: 'center' });
+    doc.fontSize(16).text(`Nombre: ${name}`, { align: 'left' });
+    doc.text(`Email: ${email}`);
+    doc.text('Experiencia:', { underline: true });
+    doc.fontSize(12).text(experience);
+
+    // Finalizar el documento PDF
+    doc.end();
   } catch (err) {
-    // Solo enviar la respuesta si no se ha enviado antes
-    if (!res.headersSent) {
-      res.status(400).json({ message: 'Error al crear CV', error: err.message });
-    }
+    res.status(400).json({ message: 'Error al crear el CV', error: err.message });
   }
 };
-
 // Función para obtener todos los CVs
 const getAllCVs = async (req, res) => {
   try {
@@ -71,8 +62,31 @@ const getAllCVs = async (req, res) => {
   }
 };
 
+// Ruta para descargar el PDF
+const downloadPDF = async (req, res) => {
+  try {
+    const { name } = req.params; // Obtener el nombre del CV de los parámetros de la URL
+    const cv = await CV.findOne({ name }); // Buscar el CV en la base de datos por nombre
+
+    if (!cv || !cv.pdf) {
+      return res.status(404).json({ message: 'CV o PDF no encontrado' });
+    }
+
+    // Configurar los encabezados para la descarga del PDF
+    res.setHeader('Content-Disposition', `attachment; filename=${name}_CV.pdf`);
+    res.setHeader('Content-Type', 'application/pdf');
+
+    // Enviar el buffer PDF como respuesta
+    res.send(cv.pdf);
+
+  } catch (error) {
+    res.status(500).json({ message: 'Error al descargar el PDF', error: error.message });
+  }
+};
+
 // Exportar las funciones del controlador
 module.exports = {
   createCV,
-  getAllCVs
+  getAllCVs,
+  downloadPDF 
 };

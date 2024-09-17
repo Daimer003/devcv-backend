@@ -4,6 +4,7 @@ const morgan = require('morgan');
 const dotenv = require('dotenv');
 const cvRoutes = require('./src/routes/cvRoutes');
 const connectDB = require('./src/config/db');
+const path = require('path');
 
 dotenv.config();
 const app = express()
@@ -22,6 +23,7 @@ app.get('/', (req, res) => {
 })
 
 app.use('/api/cv', cvRoutes);
+app.use('/files', express.static(path.join(__dirname, 'files')));
 
 const PORT = process.env.PORT || 5000;
 
