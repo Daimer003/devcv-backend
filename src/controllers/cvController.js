@@ -14,7 +14,8 @@ const createCV = async (req, res) => {
     let buffers = [];
     const stream = new Readable({
       read() {}
-    });
+    });  
+
 
     // Cuando el PDF es escrito, lo añadimos al array de buffers
     doc.on('data', (chunk) => buffers.push(chunk));
